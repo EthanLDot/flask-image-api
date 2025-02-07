@@ -4,7 +4,7 @@ import os
 from io import BytesIO
 from flasgger import Swagger, swag_from
 from flask import Flask
-
+import zipfile
 
 app = Flask(__name__)
 app.config['SWAGGER'] = {
@@ -17,36 +17,53 @@ UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-@app.route("/upload", methods=["POST"])
-def upload_image():
-    """
-    Upload an image
-    ---
-    consumes:
-      - multipart/form-data
-    parameters:
-      - name: image
-        in: formData
-        type: file
-        required: true
-        description: Image file to upload
-    responses:
-      200:
-        description: Upload successful
-      400:
-        description: No image file provided or invalid file
-    """
-    if "image" not in request.files:
-        return jsonify({"error": "No image file provided"}), 400
+@app.route('/upload', methods=['POST'])
+def upload_images():
+    if 'images' not in request.files:
+        return jsonify({'error': 'No images part in request'}), 400
+    
+    files = request.files.getlist('images')
+    if not files:
+        return jsonify({'error': 'No images uploaded'}), 400
+    
+    for file in files:
+        if file.filename == '':
+            continue
+        file.save(os.path.join(UPLOAD_FOLDER, file.filename))
+    
+    return jsonify({'message': 'Upload successful'}), 200
 
-    image = request.files["image"]
-    if image.filename == "":
-        return jsonify({"error": "No selected file"}), 400
 
-    image_path = os.path.join(app.config["UPLOAD_FOLDER"], image.filename)
-    image.save(image_path)
+# @app.route("/upload", methods=["POST"])
+# def upload_image():
+#     """
+#     Upload an image
+#     ---
+#     consumes:
+#       - multipart/form-data
+#     parameters:
+#       - name: image
+#         in: formData
+#         type: file
+#         required: true
+#         description: Image file to upload
+#     responses:
+#       200:
+#         description: Upload successful
+#       400:
+#         description: No image file provided or invalid file
+#     """
+#     if "image" not in request.files:
+#         return jsonify({"error": "No image file provided"}), 400
 
-    return jsonify({"message": "Upload successful", "path": image_path}), 200
+#     image = request.files["image"]
+#     if image.filename == "":
+#         return jsonify({"error": "No selected file"}), 400
+
+#     image_path = os.path.join(app.config["UPLOAD_FOLDER"], image.filename)
+#     image.save(image_path)
+
+#     return jsonify({"message": "Upload successful", "path": image_path}), 200
 
 
 @app.route("/image/<filename>", methods=["GET"])
@@ -160,37 +177,77 @@ def invert_image(filename):
     return send_file(img_io, mimetype="image/png")
 
 
+# @app.route("/invert", methods=["POST"])
+# def invert_uploaded_image():
+#     """
+#     Inverts an uploaded image from request data
+#     ---
+#     consumes:
+#       - multipart/form-data
+#     parameters:
+#       - name: image
+#         in: formData
+#         type: file
+#         required: true
+#         description: Image file to invert
+#     responses:
+#       200:
+#         description: Inverted image
+#       400:
+#         description: No image file provided
+#     """
+#     if "image" not in request.files:
+#         return jsonify({"error": "No image file provided"}), 400
+
+#     image = request.files["image"]
+#     img = Image.open(image)
+#     img = ImageOps.invert(img.convert("RGB"))
+    
+#     img_io = BytesIO()
+#     img.save(img_io, format="PNG")
+#     img_io.seek(0)
+
+#     return send_file(img_io, mimetype="image/png")
+
 @app.route("/invert", methods=["POST"])
-def invert_uploaded_image():
+def invert_uploaded_images():
     """
-    Inverts an uploaded image from request data
+    Inverts multiple uploaded images from request data
     ---
     consumes:
       - multipart/form-data
     parameters:
-      - name: image
+      - name: images
         in: formData
         type: file
         required: true
-        description: Image file to invert
+        description: Image files to invert
     responses:
       200:
-        description: Inverted image
+        description: Inverted images
       400:
-        description: No image file provided
+        description: No image files provided
     """
-    if "image" not in request.files:
-        return jsonify({"error": "No image file provided"}), 400
+    if "images" not in request.files:
+        return jsonify({"error": "No image files provided"}), 400
 
-    image = request.files["image"]
-    img = Image.open(image)
-    img = ImageOps.invert(img.convert("RGB"))
+    files = request.files.getlist("images")
+    if not files:
+        return jsonify({"error": "No images uploaded"}), 400
+
+    zip_io = BytesIO()
+    with zipfile.ZipFile(zip_io, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for file in files:
+            img = Image.open(file)
+            img = ImageOps.invert(img.convert("RGB"))
+            
+            img_io = BytesIO()
+            img.save(img_io, format="PNG")
+            img_io.seek(0)
+            zipf.writestr(f"inverted_{file.filename}", img_io.read())
     
-    img_io = BytesIO()
-    img.save(img_io, format="PNG")
-    img_io.seek(0)
-
-    return send_file(img_io, mimetype="image/png")
+    zip_io.seek(0)
+    return send_file(zip_io, mimetype='application/zip', as_attachment=True, download_name="inverted_images.zip")
 
 @app.route('/')
 def index():
