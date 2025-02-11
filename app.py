@@ -34,38 +34,6 @@ def upload_images():
     return jsonify({'message': 'Upload successful'}), 200
 
 
-# @app.route("/upload", methods=["POST"])
-# def upload_image():
-#     """
-#     Upload an image
-#     ---
-#     consumes:
-#       - multipart/form-data
-#     parameters:
-#       - name: image
-#         in: formData
-#         type: file
-#         required: true
-#         description: Image file to upload
-#     responses:
-#       200:
-#         description: Upload successful
-#       400:
-#         description: No image file provided or invalid file
-#     """
-#     if "image" not in request.files:
-#         return jsonify({"error": "No image file provided"}), 400
-
-#     image = request.files["image"]
-#     if image.filename == "":
-#         return jsonify({"error": "No selected file"}), 400
-
-#     image_path = os.path.join(app.config["UPLOAD_FOLDER"], image.filename)
-#     image.save(image_path)
-
-#     return jsonify({"message": "Upload successful", "path": image_path}), 200
-
-
 @app.route("/image/<filename>", methods=["GET"])
 def get_image(filename):
     """
@@ -177,38 +145,6 @@ def invert_image(filename):
     return send_file(img_io, mimetype="image/png")
 
 
-# @app.route("/invert", methods=["POST"])
-# def invert_uploaded_image():
-#     """
-#     Inverts an uploaded image from request data
-#     ---
-#     consumes:
-#       - multipart/form-data
-#     parameters:
-#       - name: image
-#         in: formData
-#         type: file
-#         required: true
-#         description: Image file to invert
-#     responses:
-#       200:
-#         description: Inverted image
-#       400:
-#         description: No image file provided
-#     """
-#     if "image" not in request.files:
-#         return jsonify({"error": "No image file provided"}), 400
-
-#     image = request.files["image"]
-#     img = Image.open(image)
-#     img = ImageOps.invert(img.convert("RGB"))
-    
-#     img_io = BytesIO()
-#     img.save(img_io, format="PNG")
-#     img_io.seek(0)
-
-#     return send_file(img_io, mimetype="image/png")
-
 @app.route("/invert", methods=["POST"])
 def invert_uploaded_images():
     """
@@ -260,90 +196,85 @@ def index():
     """
     return 'Welcome to the Image Processing API!'
 
-    if 'file' not in request.files:
-        return 'No file part', 400
-
-    file = request.files['file']
-    if file.filename == '':
-        return 'No selected file', 400
-
-    img = load_image(file)
-    if img is None:
-        return 'Invalid image file', 400
-
-    format = request.form.get('format', 'PNG').upper()
-    if format not in ['PNG', 'JPEG', 'GIF']:
-        return 'Unsupported format', 400
-
-    img_io = io.BytesIO()
-    img.save(img_io, format)
-    img_io.seek(0)
-
-    return send_file(img_io, mimetype=f'image/{format.lower()}')
-
 @app.route("/upscale", methods=["POST"])
-def upscale_uploaded_image():
+def upscale_uploaded_images():
     """
-    Upscales an uploaded image from request data
+    Upscales multiple uploaded images from request data by a factor of 2
     ---
     consumes:
       - multipart/form-data
     parameters:
-      - name: image
+      - name: images
         in: formData
         type: file
         required: true
-        description: Image file to upscale
+        description: Image files to upscale
     responses:
       200:
-        description: Upscaled image
+        description: Upscaled images
       400:
-        description: No image file provided
+        description: No image files provided
     """
-    if "image" not in request.files:
-        return jsonify({"error": "No image file provided"}), 400
+    if "images" not in request.files:
+        return jsonify({"error": "No image files provided"}), 400
 
-    image = request.files["image"]
-    img = Image.open(image)
-    img = img.resize((img.width * 2, img.height * 2), Image.LANCZOS)
+    files = request.files.getlist("images")
+    if not files:
+        return jsonify({"error": "No images uploaded"}), 400
 
-    img_io = BytesIO()
-    img.save(img_io, format="PNG")
-    img_io.seek(0)
-
-    return send_file(img_io, mimetype="image/png")
+    zip_io = BytesIO()
+    with zipfile.ZipFile(zip_io, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for file in files:
+            img = Image.open(file)
+            img = img.resize((img.width * 2, img.height * 2), Image.LANCZOS)
+            
+            img_io = BytesIO()
+            img.save(img_io, format="PNG")
+            img_io.seek(0)
+            zipf.writestr(f"upscaled_{file.filename}", img_io.read())
+    
+    zip_io.seek(0)
+    return send_file(zip_io, mimetype='application/zip', as_attachment=True, download_name="upscaled_images.zip")
 
 @app.route("/downscale", methods=["POST"])
-def downscale_uploaded_image():
+def downscale_uploaded_images():
     """
-    Downscale an uploaded image from request data
+    Downscales multiple uploaded images from request data by a factor of 2
     ---
     consumes:
       - multipart/form-data
     parameters:
-      - name: image
+      - name: images
         in: formData
         type: file
         required: true
-        description: Image file to downscale
+        description: Image files to downscale
     responses:
       200:
-        description: Downscaled image
+        description: Downscaled images
       400:
-        description: No image file provided
+        description: No image files provided
     """
-    if "image" not in request.files:
-        return jsonify({"error": "No image file provided"}), 400
+    if "images" not in request.files:
+        return jsonify({"error": "No image files provided"}), 400
 
-    image = request.files["image"]
-    img = Image.open(image)
-    img = img.resize((img.width // 2, img.height // 2), Image.LANCZOS)
+    files = request.files.getlist("images")
+    if not files:
+        return jsonify({"error": "No images uploaded"}), 400
 
-    img_io = BytesIO()
-    img.save(img_io, format="PNG")
-    img_io.seek(0)
-
-    return send_file(img_io, mimetype="image/png")
+    zip_io = BytesIO()
+    with zipfile.ZipFile(zip_io, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for file in files:
+            img = Image.open(file)
+            img = img.resize((img.width // 2, img.height // 2), Image.LANCZOS)
+            
+            img_io = BytesIO()
+            img.save(img_io, format="PNG")
+            img_io.seek(0)
+            zipf.writestr(f"upscaled_{file.filename}", img_io.read())
+    
+    zip_io.seek(0)
+    return send_file(zip_io, mimetype='application/zip', as_attachment=True, download_name="downscaled_images.zip")
 
 
 @app.route("/images", methods=["GET"])
