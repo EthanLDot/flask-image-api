@@ -5,6 +5,7 @@ from io import BytesIO
 from flasgger import Swagger, swag_from
 from flask import Flask
 import zipfile
+import time
 
 app = Flask(__name__)
 app.config['SWAGGER'] = {
@@ -26,12 +27,17 @@ def upload_images():
     if not files:
         return jsonify({'error': 'No images uploaded'}), 400
     
+    start_time = time.time()
     for file in files:
         if file.filename == '':
             continue
+        file_start_time = time.time()
         file.save(os.path.join(UPLOAD_FOLDER, file.filename))
-    
-    return jsonify({'message': 'Upload successful'}), 200
+        print(str(time.time() - file_start_time) + 's')
+    time_elapsed = time.time() - start_time
+    print("Request complete")
+    print(str(time_elapsed) + 's')
+    return jsonify({'message': 'Upload successful', 'time_elapsed': time_elapsed}), 200
 
 
 @app.route("/image/<filename>", methods=["GET"])
@@ -171,9 +177,11 @@ def invert_uploaded_images():
     if not files:
         return jsonify({"error": "No images uploaded"}), 400
 
+    start_time = time.time()
     zip_io = BytesIO()
     with zipfile.ZipFile(zip_io, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for file in files:
+            file_start_time = time.time()
             img = Image.open(file)
             img = ImageOps.invert(img.convert("RGB"))
             
@@ -181,9 +189,19 @@ def invert_uploaded_images():
             img.save(img_io, format="PNG")
             img_io.seek(0)
             zipf.writestr(f"inverted_{file.filename}", img_io.read())
-    
+            print(str(time.time() - file_start_time) + 's')
     zip_io.seek(0)
-    return send_file(zip_io, mimetype='application/zip', as_attachment=True, download_name="inverted_images.zip")
+    time_elapsed = time.time() - start_time
+    print("Request complete")
+    print(str(time_elapsed) + 's')
+    response = send_file(
+        zip_io,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name="inverted_images.zip"
+    )
+    response.headers["X-Time-Elapsed"] = str(time_elapsed)
+    return response
 
 @app.route('/')
 def index():
@@ -221,10 +239,11 @@ def upscale_uploaded_images():
     files = request.files.getlist("images")
     if not files:
         return jsonify({"error": "No images uploaded"}), 400
-
+    start_time = time.time()
     zip_io = BytesIO()
     with zipfile.ZipFile(zip_io, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for file in files:
+            file_start_time = time.time()
             img = Image.open(file)
             img = img.resize((img.width * 2, img.height * 2), Image.LANCZOS)
             
@@ -232,9 +251,20 @@ def upscale_uploaded_images():
             img.save(img_io, format="PNG")
             img_io.seek(0)
             zipf.writestr(f"upscaled_{file.filename}", img_io.read())
+            print(str(time.time() - file_start_time) + 's')
     
     zip_io.seek(0)
-    return send_file(zip_io, mimetype='application/zip', as_attachment=True, download_name="upscaled_images.zip")
+    time_elapsed = time.time() - start_time
+    print("Request complete")
+    print(str(time_elapsed) + 's')
+    response = send_file(
+        zip_io,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name="upscaled_images.zip"
+    )
+    response.headers["X-Time-Elapsed"] = str(time_elapsed)
+    return response
 
 @app.route("/downscale", methods=["POST"])
 def downscale_uploaded_images():
@@ -261,10 +291,11 @@ def downscale_uploaded_images():
     files = request.files.getlist("images")
     if not files:
         return jsonify({"error": "No images uploaded"}), 400
-
+    start_time = time.time()
     zip_io = BytesIO()
     with zipfile.ZipFile(zip_io, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for file in files:
+            file_start_time = time.time()
             img = Image.open(file)
             img = img.resize((img.width // 2, img.height // 2), Image.LANCZOS)
             
@@ -272,9 +303,20 @@ def downscale_uploaded_images():
             img.save(img_io, format="PNG")
             img_io.seek(0)
             zipf.writestr(f"upscaled_{file.filename}", img_io.read())
+            print(str(time.time() - file_start_time) + 's')
     
     zip_io.seek(0)
-    return send_file(zip_io, mimetype='application/zip', as_attachment=True, download_name="downscaled_images.zip")
+    time_elapsed = time.time() - start_time
+    print("Request complete")
+    print(str(time_elapsed) + 's')
+    response = send_file(
+        zip_io,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name="downscaled_images.zip"
+    )
+    response.headers["X-Time-Elapsed"] = str(time_elapsed)
+    return response
 
 
 @app.route("/images", methods=["GET"])
